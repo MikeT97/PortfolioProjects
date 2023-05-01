@@ -31,6 +31,13 @@ FROM public."CovidDeaths"
 GROUP BY location, population
 order by PercentPopulationInfected desc
 
+-- Infection Count
+Select Location, Population,date, MAX(total_cases) as HighestInfectionCount,  Max((total_cases/population))*100 as PercentPopulationInfected
+From public."CovidDeaths"
+--Where location like '%Canada%'
+Group by Location, Population, date
+order by PercentPopulationInfected desc
+
 -- Shows Countries with the highest death count per population
 Select location, MAX(total_deaths) AS TotalDeathCount
 FROM public."CovidDeaths"
@@ -69,12 +76,11 @@ Group By date
 order by 1,2
 
 -- Global Death Percentage, error message, can't divide by zero
-Select date, SUM(new_cases) as GlobalDailyCases, SUM(new_deaths) as GlobalDeaths,
-	SUM(new_deaths)/Sum(new_cases)*100 as DeathPercentage
-FROM public."CovidDeaths"
---Where location like '%Canada%' 
-WHERE continent is not null
-Group By date
+Select SUM(new_cases) as total_cases, SUM(cast(new_deaths as int)) as total_deaths, SUM(cast(new_deaths as int))/SUM(New_Cases)*100 as DeathPercentage
+From public."CovidDeaths"
+--Where location like '%Canada%'
+where continent is not null 
+--Group By date
 order by 1,2
 
 -- Joined two tables, looking at total population vs vaccinations
