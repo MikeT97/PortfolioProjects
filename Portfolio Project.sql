@@ -1,171 +1,170 @@
+
+select *
+from [Data Cleaning Project].dbo.[Nashville Housing]
+
+
+
+-- standardize dates
+
+select SaleDateConverted, convert(Date,SaleDate)
+from [Data Cleaning Project].dbo.NashvilleHousing]
+
+update [Nashville Housing]
+Set SaleDate - convert(Date,SaleDate)
+
+
+alter table NashvilleHousing
+add SaleDateConverted date;
+
+update NashvilleHousing
+Set SaleDateConverted = convert(Date,SaleDate)
+
+
+
+
+
+-- populate property address data
+
 Select *
-FROM public."CovidDeaths"
-Where continent is not null
-order by 3,4
+From [Data Cleaning Project].dbo.NashvilleHousing
+--Where PropertyAddress is null
+order by ParcelID
+
+
+-- the point is to populate the property address table of all the nulls. So we now use isnull to check if a property address is null, then if it is it uses b property address and sticks it in there
+Select a.ParcelID, a.PropertyAddress, b.ParcelID, b.PropertyAddress, ISNULL(a.PropertyAddress,b.PropertyAddress)
+From [Data Cleaning Project].dbo.NashvilleHousing a
+JOIN [Data Cleaning Project].dbo.NashvilleHousing b
+	on a.ParcelID = b.ParcelID
+	AND a.[UniqueID ] <> b.[UniqueID ]
+Where a.PropertyAddress is null
+
+-- now I am updating that column and populating it with the addresses that we got from b.PropertyAddress into a
+Update a
+SET PropertyAddress = ISNULL(a.PropertyAddress,b.PropertyAddress)
+From [Data Cleaning Project].dbo.NashvilleHousing a
+JOIN [Data Cleaning Project].dbo.NashvilleHousing b
+	on a.ParcelID = b.ParcelID
+	AND a.[UniqueID ] <> b.[UniqueID ]
+Where a.PropertyAddress is null
 
 
 
-Select location, date, total_cases, new_cases, total_deaths, population
-FROM public."CovidDeaths"
-order by 1,2
-
--- Looking at the total cases vs. total deaths, looking at how many deaths they have per cases, in a percent, the ::numeric turns the column into a numeric value so I can get the # i am looking for. I added a where clause to specify what the rates where like in Canada
--- this number shows the likelihood of dying from Covid in your Country, in my case Canada
-Select location, date, total_cases, total_deaths, (total_deaths::numeric/total_cases::numeric)*100::numeric as DeathPercentage
-FROM public."CovidDeaths"
-Where location like '%Canada%'
-order by 1,2
-
--- Looking at total cases vs. population
--- shows the % of the population that got COVID
-Select location, date, total_cases, population, (total_cases::numeric/population::numeric)*100::numeric as CasePercentage
-FROM public."CovidDeaths"
-Where location like '%Canada%'
-order by 1,2
-
--- Looking at countries with the highest infection rate compared to population
-Select location, MAX(total_cases) AS HighestInfectionCount, population, MAX((total_cases::numeric/population::numeric))*100::numeric as
-	PercentPopulationInfected
-FROM public."CovidDeaths"
---Where location like '%Canada%'
-GROUP BY location, population
-order by PercentPopulationInfected desc
-
--- Infection Count
-Select Location, Population,date, MAX(total_cases) as HighestInfectionCount,  Max((total_cases/population))*100 as PercentPopulationInfected
-From public."CovidDeaths"
---Where location like '%Canada%'
-Group by Location, Population, date
-order by PercentPopulationInfected desc
-
--- Shows Countries with the highest death count per population
-Select location, MAX(total_deaths) AS TotalDeathCount
-FROM public."CovidDeaths"
---Where location like '%Canada%'
-Where continent is not null
-GROUP BY location
-order by TotalDeathCount desc
 
 
--- Breaking things down by Continent 
-
-Select continent, MAX(total_deaths) AS TotalDeathCount
-FROM public."CovidDeaths"
---Where location like '%Canada%'
-Where continent is not null
-GROUP BY continent
-order by TotalDeathCount desc
 
 
--- Showing continents with the highest death count per population
-Select continent, MAX(total_deaths) AS TotalDeathCount
-FROM public."CovidDeaths"
---Where location like '%Canada%'
-Where continent is not null
-GROUP BY continent
-order by TotalDeathCount desc
+-- Breaking the Address Column into individual Columns (Address, City, State)
+
+Select PropertyAddress
+From [Data Cleaning Project].dbo.NashvilleHousing
+--Where PropertyAddress is null
+--order by ParcelID
+
+--this helps us to find the commas in the address and get rid of them
+SELECT
+SUBSTRING(PropertyAddress, 1, CHARINDEX(',', PropertyAddress) -1 ) as Address
+, SUBSTRING(PropertyAddress, CHARINDEX(',', PropertyAddress) + 1 , LEN(PropertyAddress)) as Address
+From [Data Cleaning Project].dbo.NashvilleHousing
+
+-- Now I am going to create two new columns 
+
+alter table NashvilleHousing
+add PropertySplitAddress Nvarchar(255);
+
+update NashvilleHousing
+Set PropertySplitAddress = SUBSTRING(PropertyAddress, 1, CHARINDEX(',', PropertyAddress) -1 )
+
+alter table NashvilleHousing
+add PropertySplitCity Nvarchar(255);
+
+update NashvilleHousing
+Set PropertySplitCity = SUBSTRING(PropertyAddress, CHARINDEX(',', PropertyAddress) + 1 , LEN(PropertyAddress))
 
 
--- Global Numbers, new COVID cases by date
-
-Select date, SUM(new_cases) as GlobalDailyCases, SUM(new_deaths) as GlobalDeaths
-FROM public."CovidDeaths"
---Where location like '%Canada%' 
-WHERE continent is not null
-Group By date
-order by 1,2
-
--- Global Death Percentage, error message, can't divide by zero
-Select SUM(new_cases) as total_cases, SUM(cast(new_deaths as int)) as total_deaths, SUM(cast(new_deaths as int))/SUM(New_Cases)*100 as DeathPercentage
-From public."CovidDeaths"
---Where location like '%Canada%'
-where continent is not null 
---Group By date
-order by 1,2
-
--- Joined two tables, looking at total population vs vaccinations
-
-Select dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations
-, SUM(vac.new_vaccinations) OVER (Partition by dea.location Order by dea.location,
-								 dea.Date) as RollingPeopleVaccinated
---, (RollingPeopleVaccinated/population)*100
-From public."covidvac" as vac
-JOIN public."CovidDeaths" as dea
-	On dea.location = vac.location
-	and dea.date = vac.date
-WHERE dea.continent is not null
-order by 2,3
 
 
--- Use CTE
-With PopvsVac (Continent, location, date, population, new_vaccinations, RollingPeopleVaccinated)
-as
-(
-Select dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations
-, SUM(vac.new_vaccinations) OVER (Partition by dea.location Order by dea.location,
-								 dea.Date) as RollingPeopleVaccinated
---, (RollingPeopleVaccinated/population)*100
-From public."covidvac" as vac
-JOIN public."CovidDeaths" as dea
-	On dea.location = vac.location
-	and dea.date = vac.date
-WHERE dea.continent is not null
---order by 2,3
+
+
+
+
+
+
+-- Splitting up the owner's address column into 3 seperate using a different function tehn creating an actual column in our dataset for the new data we recently split up
+select OwnerAddress
+From [Data Cleaning Project].dbo.NashvilleHousing
+
+select
+PARSENAME(REPLACE(OwnerAddress, ',', '.') , 3) AS OwnerSplitAddress
+,PARSENAME(REPLACE(OwnerAddress, ',', '.') , 2) as OwnerSplitCity
+,PARSENAME(REPLACE(OwnerAddress, ',', '.') , 1) as OwnerSplitState
+From [Data Cleaning Project].dbo.NashvilleHousing
+
+alter table NashvilleHousing
+add OwnerSplitAddress Nvarchar(255);
+
+update NashvilleHousing
+Set OwnerSplitAddress = PARSENAME(REPLACE(OwnerAddress, ',', '.') , 3) 
+
+alter table NashvilleHousing
+add OwnerSplitCity Nvarchar(255);
+
+update NashvilleHousing
+Set OwnerSplitCity = PARSENAME(REPLACE(OwnerAddress, ',', '.') , 2)
+
+alter table NashvilleHousing
+add OwnerSplitState Nvarchar(255);
+
+update NashvilleHousing
+Set OwnerSplitState = PARSENAME(REPLACE(OwnerAddress, ',', '.') , 1)
+
+
+
+
+
+
+
+-- Change Y and N to Yes and No in 'Sold as Vacant' field
+-- this function allows me to see how many said yes and no
+select distinct(SoldAsVacant), count(SoldAsVacant)
+From [Data Cleaning Project].dbo.NashvilleHousing
+group by SoldAsVacant
+order by 2
+
+
+select SoldAsVacant,
+	case when SoldAsVacant = 'Y' then 'Yes'
+		when SoldAsVacant = 'N' then 'No'
+		ELSE SoldAsVacant
+		END
+From [Data Cleaning Project].dbo.NashvilleHousing
+
+Update NashvilleHousing
+SET SoldAsVacant = case when SoldAsVacant = 'Y' then 'Yes'
+		when SoldAsVacant = 'N' then 'No'
+		ELSE SoldAsVacant
+		END
+
+
+
+
+
+
+-- get rid of duplicates
+
+WITH RowNumCTE AS(
+	SELECT *,
+	ROW_NUMBER() over (
+		Partition By ParcelID, PropertyAddress, SalePrice, SaleDate, LegalReference
+		ORDER BY UniqueID) row_num
+From [Data Cleaning Project].dbo.NashvilleHousing
 )
-Select *, (RollingPeopleVaccinated/Population)*100
-From PopvsVac
-
-
--- Creating a View to store data for later viz
-
-Create View GlobalCovidCases as
-Select date, SUM(new_cases) as GlobalDailyCases, SUM(new_deaths) as GlobalDeaths
-FROM public."CovidDeaths"
---Where location like '%Canada%' 
-WHERE continent is not null
-Group By date
---order by 1,2
-
-
-
-
--- CREATING PercentPopulationVaccinated view
-Create View PercentPopulationVaccinated as
-With PopvsVac (Continent, location, date, population, new_vaccinations, RollingPeopleVaccinated)
-as
-(
-Select dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations
-, SUM(vac.new_vaccinations) OVER (Partition by dea.location Order by dea.location,
-								 dea.Date) as RollingPeopleVaccinated
---, (RollingPeopleVaccinated/population)*100
-From public."covidvac" as vac
-JOIN public."CovidDeaths" as dea
-	On dea.location = vac.location
-	and dea.date = vac.date
-WHERE dea.continent is not null
---order by 2,3
-)
-Select *, (RollingPeopleVaccinated/Population)*100
-From PopvsVac
-
-
-
-
-Create View DeathCount as
-Select continent, MAX(total_deaths) AS TotalDeathCount
-FROM public."CovidDeaths"
---Where location like '%Canada%'
-Where continent is not null
-GROUP BY continent
-order by TotalDeathCount desc
-
-
-
-Create View TotalCasesCanada as
-Select location, date, total_cases, population, (total_cases::numeric/population::numeric)*100::numeric as CasePercentage
-FROM public."CovidDeaths"
-Where location like '%Canada%'
-order by 1,2
+Delete
+-- select *
+from RowNumCTE
+Where row_num > 1
+-- order by PropertyAddress
+-- this function allow us to store all our duplicates in a CTE and then delete them from the dataset, which is not common pratice but good for practice
 
 
 
@@ -174,3 +173,15 @@ order by 1,2
 
 
 
+
+
+-- Deleting Unused Columns
+
+Select *
+From [Data Cleaning Project].dbo.NashvilleHousing
+
+ALTER TABLE [Data Cleaning Project].dbo.NashvilleHousing
+drop column OwnerAddress, TaxDistrict, PropertyAddress, SaleDate
+-- forgot SaleDate
+ALTER TABLE [Data Cleaning Project].dbo.NashvilleHousing
+drop column SaleDate
